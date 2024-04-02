@@ -1,0 +1,10 @@
+Pasos para calibrar el robot:
+
+1. Cargar el codigo motor_calibration2.ino en el arduino, 
+   con la opcion #define STEADY_STATE descomentada (y el 
+   resto comentadas).
+2. Desconectar y conectar el arduino al PC para forzar al
+   serial monitor para que quede libre.
+3. Ejecutar steady_state.py hasta que llege al valor maximo
+   de PWM
+4. Ejecutar setpoint.py para obtener los valores y las graficas
