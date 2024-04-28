@@ -8,3 +8,11 @@ Pasos para calibrar el robot:
 3. Ejecutar steady_state.py hasta que llege al valor maximo
    de PWM
 4. Ejecutar setpoint.py para obtener los valores y las graficas
+   y ajustar el setpoint
+5. Volver a cargar en el arduino motor_calibration2.ino, esta
+   esta vez con la opcion #define CALIBRATION
+	5.1. Dentro de esta opcion, ir elegiendo entre  SET_KP,
+	     SET_KI o SET_KD
+6. Utilizar set_pid.py para obtener la respuesta deseada.
+7. Una vez ajustado, utilizar la opcion TEST y el codigo
+   test.py para observar la respuesta.
