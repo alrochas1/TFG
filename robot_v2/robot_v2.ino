@@ -218,42 +218,40 @@ void loop() {
 // PID Controller
 // -----------------------------------------------------------------------------
 #ifdef MERRY
-double K_p[2] = {240, 180};
-double K_i[2] = {75, 75};
-double K_d[2]= {0.0, 0.0};
-double a_ff[2] = {1.8, 1.85};
-double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
+  double K_p[2] = {240, 180};
+  double K_i[2] = {75, 75};
+  double K_d[2]= {0.0, 0.0};
+  double a_ff[2] = {1.8, 1.85};
+  double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
 
 #endif
 
 #ifdef SAM
-double K_p[2] = {240, 180};
-double K_i[2] = {75, 75};
-//double K_i[2] = {0, 0};
-double K_d[2] = {0.0, 0.0};
-double a_ff[2] = {MINPWM, MINPWM+50};
-double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
+  double K_p[2] = {240, 180};
+  double K_i[2] = {75, 75};
+  //double K_i[2] = {0, 0};
+  double K_d[2] = {0.0, 0.0};
+  double a_ff[2] = {MINPWM, MINPWM+50};
+  double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
 
 #endif
-
 
 #ifdef FRODO
-double K_p[2] = {10, 80};
-//double K_i[2] = {75, 75};
-double K_i[2] = {0, 0};
-double K_d[2] = {0.0, 0.0};
-double a_ff[2] = {MINPWM, MINPWM+50};
-double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
+  double K_p[2] = {10, 80};
+  //double K_i[2] = {75, 75};
+  double K_i[2] = {0, 0};
+  double K_d[2] = {0.0, 0.0};
+  double a_ff[2] = {MINPWM, MINPWM+50};
+  double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
 #endif
-
 
 // Estos son los buenos para el mio
 #ifdef ALEJANDRO
-double K_p[2] = {10, 10};
-double K_i[2] = {0, 0};
-double K_d[2] = {0.0, 0.0};
-double a_ff[2] = {-15, -30};
-double b_ff[2] = {2.35/(MAXPWM - MINPWM), 2.00/(MAXPWM - MINPWM)};
+  double K_p[2] = {10, 10};
+  double K_i[2] = {0, 0};
+  double K_d[2] = {0.0, 0.0};
+  double a_ff[2] = {-15, -30};
+  double b_ff[2] = {2.35/(MAXPWM - MINPWM), 2.00/(MAXPWM - MINPWM)};
 #endif
 
 
@@ -299,25 +297,10 @@ int feedforward(int motor) {
   ) : 0;    
 }
 
-// -----------------------------------------------------------------------------
-// INSTRUCCIONES
-// -----------------------------------------------------------------------------
-//   Inserta tu código en la función "update_control". Está función se invoca
-// períódicamente, pasándole información actualizada sobre el estado del robot.
-//
-// En ella puedes realizar llamadas a las funciones de la API para acceder a las
-// funciones básicas del robot:
-//   - set_wheel_speed(int wheel, int direction, int speed) 
-//
-// Si necesitas que el estado de una variable persista entre llamadas a
-// update_control, deberás utilizar una variable global. Utiliza la sección
-// comentada unas líneas más abajo. Para evitar conflictos de nombre con 
-// variables del firmware, utiliza el prefijo "user_". 
+// ##########################################################
+// ################### VARIABLES GLOBALES ################### 
+// ##########################################################
 
-// -----------------------------------------------------------------------------
-// Define aquí tus variables globales
-// -----------------------------------------------------------------------------
-// (Ej.: const int user_time = 0;)
 
 double user_lw = 0;
 double user_rw = 0;
@@ -325,58 +308,73 @@ double user_rw = 0;
 double t_tot=0;
 
 int user_state = "FORWARD";
-double theta = PI/2;  // Angulo hacia el que apunta el robot
+
+// -----------------------------------------------------
 // Coordenadas en las que se encuentra el robot
+double theta = PI/2;  // Angulo hacia el que apunta el robot
 double x0 = 0;
 double y0 = 0;
 
+// Coordenadas a las que quiere ir
+double x = -0.5;
+double y = 0.0;
+
 double epsilon = 0.1;  // Para tener en cuenta el error
 
+// -----------------------------------------------------
+
 int i = 1;
+double angle = 90.0;  //  Se usa para el test
 
 
-// -----------------------------------------------------------------------------
-// update_control
-// -----------------------------------------------------------------------------
-//   Bucle de control principal. Ejecuta el código periódicamente, con un
-// periódo nominal especificado por el valor sampling_time_us.
-//
-// params
-// ------
-//   double count_left_wheel  Incremento de cuentas de encoder de la rueda izquierda. 
-//   double count_right_wheel Incremento de cuentas de encoder de la rueda derecha. 
-//   double dt_s              Indica el tiempo real, en segundos, transcurrido
-//                            desde la última invocación.
-// -----------------------------------------------------------------------------
 
-void move_forward(double speed, int count_left_wheel, int count_right_wheel) {
 
-    setpointW[LEFT_WHEEL]  = speed;
-    setpointW[RIGHT_WHEEL] = speed;
+// ##########################################################
+// ################### FUNCIONES MOTORES #################### 
+// ##########################################################
+
+
+void move_forward(double speed, double count_left_wheel, double count_right_wheel) {
+
+
+    if ((count_left_wheel < 1.75) || (count_right_wheel < 1.75)){
+      setpointW[LEFT_WHEEL]  = 2.5;
+      setpointW[RIGHT_WHEEL] = 2.5;
+    }
+    else{
+      setpointW[LEFT_WHEEL]  = speed;
+      setpointW[RIGHT_WHEEL] = speed;
+    }
 
     set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
     set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
 }
 
+
+// ------------------------------------------------------------------------------------
 // Esta es para girar sobre si mismo
-void turn_left(int count_left_wheel, int count_right_wheel){
-    Serial.print("Girando izquierda ...");
+void turn_left(double count_left_wheel, double count_right_wheel){
+    //Serial.print("Girando izquierda ...");
     turn(LEFT, count_left_wheel, count_right_wheel);
 }
 
-void turn_right(int count_left_wheel, int count_right_wheel){
+void turn_right(double count_left_wheel, double count_right_wheel){
     Serial.print("Girando derecha ...");
     turn(RIGHT, count_left_wheel, count_right_wheel);
 }
 
 
-void turn(int TURN, int count_left_wheel, int count_right_wheel) {
+void turn(int TURN, double count_left_wheel, double count_right_wheel) {
 
     setpointW[LEFT_WHEEL]  = 2.5;
     setpointW[RIGHT_WHEEL] = 2.5;
 
-    set_wheel_speed(LEFT_WHEEL,  !TURN,  pid_left_motor(count_left_wheel));
-    set_wheel_speed(RIGHT_WHEEL,  TURN,  pid_left_motor(count_right_wheel));
+    double count = (TURN == LEFT) ? count_right_wheel : count_left_wheel;
+    int wheel = (TURN == RIGHT) ? LEFT_WHEEL : RIGHT_WHEEL;
+    set_wheel_speed(wheel,  FORWARD,  pid(wheel, count));
+    //set_wheel_speed(LEFT_WHEEL,  !TURN,  pid_left_motor(count_left_wheel));
+    //set_wheel_speed(RIGHT_WHEEL,  TURN,  pid_left_motor(count_right_wheel));
+
 
 }
 
@@ -384,16 +382,16 @@ void turn(int TURN, int count_left_wheel, int count_right_wheel) {
 // ------------------------------------------------------------------------------------
 // Esta es para girar con un radio concreto (esta es un poco confusa por que hice la cuenta para
 // diametro, en vez de radio)
-void turn_radius_left(double radius, int count_left_wheel, int count_right_wheel){
+void turn_radius_left(double radius, double count_left_wheel, double count_right_wheel){
   turn_radius(LEFT, radius, count_left_wheel, count_right_wheel);
 }
-void turn_radius_right(double radius, int count_left_wheel, int count_right_wheel){
+void turn_radius_right(double radius, double count_left_wheel, double count_right_wheel){
   turn_radius(RIGHT, radius, count_left_wheel, count_right_wheel);
 }
 
-void turn_radius(int TURN, double radius, int count_left_wheel, int count_right_wheel){
+void turn_radius(int TURN, double radius, double count_left_wheel, double count_right_wheel){
   
-  if (radius <= L_EJE){     // Ten en cuenta que el radio minimo es L_EJE;
+  if (radius <= L_EJE/2){     // Ten en cuenta que el diametro minimo es L_EJE;
     turn(TURN, count_left_wheel, count_right_wheel);
   }
   else{
@@ -420,13 +418,13 @@ void stop(){
 
 // ------------------------------------------------------------------------------------
 
-// Simplifica codigo. Resetea las distancias y añade un delay (puedes poner 0)
+// Simplifica codigo. Resetea las distancias y añade un delay (se puede poner 0)
 void reset_state(int time){
 
-  user_lw = 0;
-  user_rw = 0;
   stop();
   delay(time);
+  user_lw = 0;
+  user_rw = 0;
 
 }
 
@@ -439,6 +437,17 @@ double normalize_angle(double angle){
 
 }
 
+// Para que gire un angulo determinado
+double turn_distance(double angle){
+
+  return 2*PI*L_EJE*(angle/360.0);
+
+}
+
+
+// ##########################################################
+// ##################### UPDATE CONTROL ##################### 
+// ##########################################################
 
 void update_control(double count_left_wheel, double count_right_wheel, double dt_s) {
 
@@ -471,15 +480,12 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   Serial.print(distance);
   Serial.print("\t");
 
-  //Serial.print("Estado:  ");
-  //Serial.println(user_state);
-
 
   // ELEGIR LO QUE SE QUIERE HACER #############################
 
   //#define CIRCLE        // Sirve para hacer circulos
-  //#define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
-  #define POINT         // Sirve para hacer que se mueva a las coordenadas requeridas
+  #define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
+  //#define POINT         // Sirve para hacer que se mueva a las coordenadas requeridas
   //#define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
   //#define TEST
   // Si no usas ninguno se queda parado
@@ -494,7 +500,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(SQUARE) // Sirve para hacer cuadrados o para hacer una linea recta
 
-    double L_SQUARE =  0.5;     // Este es el lado del cuadrado(m)
+    double L_SQUARE =  0.8;     // Este es el lado del cuadrado(m)/longitud de la linea
     int LINE = 2;               // 1 para cuadrados, 2 para rectas
     double speed = 3;
 
@@ -507,12 +513,12 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     }
     else if (user_state == "TURN"){
       turn_left(count_left_RPS, count_right_RPS);
-      if ((distance_LEFT >= PI*L_EJE*0.5*LINE) || (distance_RIGHT >= PI*L_EJE*0.5*LINE)){
+      if (distance_RIGHT >= turn_distance(90*LINE)){
         user_state = "FORWARD";
         reset_state(200);
       }
     }
-    else{
+    else{ // Por si acaso
       user_state == "FORWARD";
     }
 
@@ -520,26 +526,24 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   #elif defined(POINT) // Sirve para hacer que se mueva a las coordenadas requeridas
 
     // Coordenadas en metros
-    double x = 0.5;
-    double y = 0.0;
     double speed = 2.75;
     
     // Angulo actual
+    double theta0 = theta;
     distance_LEFT  = (user_state == "TURN_LEFT")  ? -distance_LEFT :  distance_LEFT;
     distance_RIGHT = (user_state == "TURN_RIGHT") ? -distance_RIGHT : distance_RIGHT;
     distance = (distance_LEFT+distance_RIGHT)/2.0;  // De esta manera la distancia sera ~= 0 cuando gire
 
-    theta = (user_state == "TURN_RIGHT") ? (theta - 2*(distance_LEFT-distance)/L_EJE) : (theta + 2*(distance_RIGHT-distance)/L_EJE);
+    theta = (user_state == "TURN_LEFT") ? (theta - 2*(distance_LEFT)/L_EJE) : (theta + 2*(distance_RIGHT)/L_EJE);
     theta = normalize_angle(theta);
 
     // Posicion actual
-    x0 += distance*cos(theta);
-    y0 += distance*sin(theta);
+    x0 += L_EJE*(theta - theta0)*cos(theta);
+    y0 += L_EJE*(theta - theta0)*sin(theta);
 
     // Calcula hacia donde esta el destino
     double phi = atan2(y - y0, x - x0);
     phi = normalize_angle(phi);
-    //phi = theta;  // Depuracion
 
     Serial.print("Coordenadas (x, y) (m):  ");
     Serial.print(x0);
@@ -552,12 +556,15 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     Serial.print("Angulo phi (rad):  ");
     Serial.print(phi);
     Serial.print("\t");
+    Serial.print("Distancia de giro:  ");
+    Serial.print(2*(distance_RIGHT)/L_EJE);
+    Serial.print("\t");
 
 
-    if ((fabs(x0 - x) > epsilon*0.8) || (fabs(y0 - y) > epsilon*0.8)){
+    if ((fabs(x0 - x) > epsilon*0.4) || (fabs(y0 - y) > epsilon*0.4)){
 
       // Alinea el robot hacia el punto correcto
-      if (fabs(phi - theta) > epsilon){    
+      if (fabs(phi - theta) > 2*epsilon){    
         if (normalize_angle(theta - phi) < PI){
           turn_right(count_left_RPS, count_right_RPS);
           user_state = "TURN_RIGHT";
@@ -578,8 +585,11 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     }
 
     else{
-      stop();
       pixels.fill(pixels.Color(255, 0, 0));
+      pixels.show();
+      reset_state(5000);
+      x = -1.0;
+      y = 0.25;
     }
 
     pixels.show();
@@ -590,66 +600,19 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(TEST)
 
-    int angle = 30;
-    double speed = 3;
-
-    if (user_state == 1){
-      move_forward(speed, count_left_RPS, count_right_RPS);
-      if (distance >= 0.4){
-        user_state++;
-        user_lw = 0; distance_LEFT  = 0;
-        user_rw = 0; distance_RIGHT = 0;
-        stop();
-        delay(300);
-      }
-    }
-    else if (user_state == 2){
-      turn_left(count_left_RPS, count_right_RPS);
-      if ((distance_LEFT >= 2*PI*L_EJE*angle/360) || (distance_RIGHT >= 2*PI*L_EJE*angle/360)){
-        user_state++;
-        user_lw = 0; distance_LEFT  = 0;
-        user_rw = 0; distance_RIGHT = 0;
-        stop();
-        delay(300);
-      }
+    turn_left(count_left_RPS, count_right_RPS);
+    
+    if (distance_RIGHT >= turn_distance(angle)){
+      Serial.print("Grados Girados: ");
+      Serial.print(angle);
+      angle += 90.0;
+      pixels.setPixelColor(i, pixels.Color(0, 255, 0));
+      pixels.show();
+      i++;
+      reset_state(3000);
     }
 
-    else if (user_state == 3){
-      move_forward(speed, count_left_RPS, count_right_RPS);
-      if (distance >= 0.2){
-        user_state++;
-        user_lw = 0; distance_LEFT  = 0;
-        user_rw = 0; distance_RIGHT = 0;
-        stop();
-        delay(300);
-      }
-    }
-
-    else if (user_state == 4){
-      turn_right(count_left_RPS, count_right_RPS);
-      if ((distance_LEFT >= 2*PI*L_EJE*angle/360) || (distance_RIGHT >= 2*PI*L_EJE*angle/360)){
-        user_state++;
-        user_lw = 0; distance_LEFT  = 0;
-        user_rw = 0; distance_RIGHT = 0;
-        stop();
-        delay(300);
-      }
-    }
-
-    else if (user_state == 5){
-      move_forward(speed, count_left_RPS, count_right_RPS);
-      if (distance >= 0.4){
-        user_state = 1;
-        user_lw = 0; distance_LEFT  = 0;
-        user_rw = 0; distance_RIGHT = 0;
-        stop();
-        delay(300);
-      }
-    }
-    else{
-      Serial.println("Estado no valido. Seleccionando estado inicial por defecto");
-      user_state = 1;
-    }
+    
 
 
 
@@ -674,5 +637,6 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   //
   //
 }
+
 
 
