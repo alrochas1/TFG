@@ -9,10 +9,17 @@ import numpy as np
 
 # Abre el video
 ruta_archivo = input("Ingrese la ruta del archivo de video (sin extensión): ")
-cap = cv.VideoCapture(f"./Images/{ruta_archivo}.avi")
+extensiones = ['.avi', '.mp4', '.mkv']
+
+for extension in extensiones:
+    cap = cv.VideoCapture(f"./Images/{ruta_archivo}{extension}")
+    if cap.isOpened():
+        break
+
 if not cap.isOpened():
-    print("Error: No se pudo abrir el archivo de video.")
-    exit()
+        print("Error: No se pudo abrir el archivo de video.")
+        exit()
+    
 
 # Obtiene los parametros del video (resolucion y FPS)
 res = [cap.get(cv.CAP_PROP_FRAME_WIDTH), cap.get(cv.CAP_PROP_FRAME_HEIGHT)]
