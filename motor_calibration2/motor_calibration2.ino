@@ -26,18 +26,19 @@
 using namespace std;
 
 // H-BRIDGE - Uncomment only one option
-//#define H_BRIDGE_RED 
-#define H_BRIDGE_BLACK  
+#define H_BRIDGE_RED 
+//#define H_BRIDGE_BLACK  
 
 // ARDUINO - Uncomment only one option
-#define ARDUINO_TYPE_EVERIS  
-//#define ARDUINO_TYPE_MKR  
+//#define ARDUINO_TYPE_EVERIS  
+#define ARDUINO_TYPE_MKR  
 
 // THE COMPANY - Uncomment only one option
 // #define MERRY
 // #define FRODO
 // #define SAM
-#define OTHER
+//#define ALEJANDRO_NANO
+#define ALEJANDRO_MKR
 
 // -----------------------------------------------------------------------------
 // PIN layout
@@ -72,7 +73,7 @@ Adafruit_NeoPixel pixels(NUMPIXELS, LED_RING, NEO_GRB + NEO_KHZ400);
   const int pin_left_motor_enable  = 6;
   const int pin_right_motor_dir_1  = 7;
   const int pin_right_motor_dir_2  = 8;
-  const int pin_right_motor_enable = 9;
+  const int pin_right_motor_enable = 2;
 #endif
 
 // -----------------------------------------------------------------------------
@@ -88,8 +89,9 @@ const int   NT = 40;          // Numero de muescas del encoder
 
 #define FORWARD LOW
 #define BACKWARD HIGH
-#define MINPWM 80
+#define MINPWM 100
 #define MAXPWM 200
+double LIMIT_PWM[2] = {200.0, 200.0};
 
 
 
@@ -108,7 +110,8 @@ void set_wheel_speed(int wheel, int direction, int speed) {
 #endif
 
   int pin_enable = (wheel == LEFT_WHEEL) ? pin_left_motor_enable : pin_right_motor_enable;
-  analogWrite(pin_enable, speed);
+  analogWrite(pin_enable, speed);  
+
 }
 
 // -----------------------------------------------------------------------------
@@ -145,7 +148,7 @@ void setup() {
   setup_comms();
   setup_pixels();
 
-  delay(500);     // A la novena vez que te pilla la mano, ya no hace gracia :)
+  //delay(500);     // A la novena vez que te pilla la mano, ya no hace gracia :)
 }
 
 void setup_motors() {
@@ -238,14 +241,20 @@ double b_ff[2] = {1.8/(MAXPWM - MINPWM), 1.8/(MAXPWM - MINPWM)};
 #endif
 
 
-#ifdef OTHER
-double K_p[2] = {20, 20};
-double K_i[2] = {0, 0};
-double K_d[2] = {0.0, 0.0};
-double a_ff[2] = {-15, -15};
-double b_ff[2] = {2.35/(MAXPWM - MINPWM), 2.35/(MAXPWM - MINPWM)};
-//double a_ff[2] = {MINPWM, MINPWM};
-//double b_ff[2] = {18.0/(MAXPWM - MINPWM), 18.0/(MAXPWM - MINPWM)};
+#ifdef ALEJANDRO_NANO
+  double K_p[2] = {10, 10};
+  double K_i[2] = {0, 0};
+  double K_d[2] = {0.0, 0.0};
+  double a_ff[2] = {-15, -30};
+  double b_ff[2] = {2.35/(MAXPWM - MINPWM), 2.00/(MAXPWM - MINPWM)};
+#endif
+
+#ifdef ALEJANDRO_MKR
+  double K_p[2] = {60, 60};
+  double K_i[2] = {250, 250};
+  double K_d[2] = {1.0, 1.0};
+  double a_ff[2] = {-25, -140};
+  double b_ff[2] = {1.83/(MAXPWM - MINPWM), 1.07/(MAXPWM - MINPWM)};
 #endif
 
 
@@ -269,12 +278,15 @@ int pid(int motor, double w) {
   unsigned long current_time = millis();
   double elapsed_time = current_time - previous_time_ms[motor];
   double error = setpointW[motor] - w;
-  double u0 = feedforward(motor); 
+  double u0 = feedforward(motor);
+  LIMIT_PWM[motor] = (1.05*u0 <= 200) ? 1.05*u0 : 200.0;  // Para evitar overshoot muy grande
   double P = K_p[motor]*error;
   double I = I_prev[motor] + K_i[motor]*error*elapsed_time*1e-3;
-  double D = K_d[motor]*(error - previous_error[motor]) / elapsed_time;
+  double D = (elapsed_time == 0) ? 0 : K_d[motor]*(error - previous_error[motor]) / (elapsed_time*1e-3);
+  //Serial.println(D);
   double u = u0 + P+I+D;
-  double v = constrain(u, MINPWM, MAXPWM);
+  //Serial.println(1.15*u0);
+  double v = constrain(u, MINPWM, LIMIT_PWM[motor]);
   if((u - v)*error <= 0) {
     I_prev[motor] = I;
   }
@@ -323,10 +335,20 @@ int user_state = 0;
 float d_max=20;
 float d_min=10;
 
-double T = 0;
+double T = 6;
 int i = 0;
 
 //int state = "TESTING";  // Para el codigo de Python, puede ser TESTING o WAITING (ignorar)
+
+void stop(){
+
+  setpointW[LEFT_WHEEL]  = 0;
+  setpointW[RIGHT_WHEEL] = 0;
+
+  set_wheel_speed(LEFT_WHEEL,  FORWARD,  0);
+  set_wheel_speed(RIGHT_WHEEL, BACKWARD, 0);
+
+}
 
 
 // -----------------------------------------------------------------------------
@@ -343,17 +365,6 @@ int i = 0;
 //                            desde la última invocación.
 // -----------------------------------------------------------------------------
 
-// Para que el serial plotter se vea bien. Limita los valores del eje Y
-void serial_limit(){
-
-  Serial.print("0");
-  Serial.print("\t");
-  Serial.print("16");
-  Serial.print("\t");
-
-}
-
-
 
 void update_control(double count_left_wheel, double count_right_wheel, double dt_s) {
 
@@ -365,16 +376,19 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   user_rw += count_right_wheel;
 
   
-  double count_left_RPM  = 60*(count_left_wheel/NT)/dt_s;
-  double count_right_RPM = 60*(count_right_wheel/NT)/dt_s;
   double count_left_RPS  = (count_left_wheel/NT)/dt_s;
   double count_right_RPS = (count_right_wheel/NT)/dt_s;
+  double count_left_RPM  = 60*count_left_RPS;
+  double count_right_RPM = 60*count_right_RPS;
   double distance = (user_lw*2*PI*R)/(NT);
 
   //Serial.print("Velocidad encoder (RPS):  ");
   Serial.print(count_left_RPS);
   Serial.print("\t");
   Serial.print(count_right_RPS);
+  //Serial.print("\t");
+  //Serial.print(dt_s);
+  
 
 
   //Serial.print("Distancia (m):  ");
@@ -397,100 +411,64 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // Para calibrar los parametros del PID
   #ifdef CALIBRATION
 
+    // Elige el parametro que se desea ajustar
+    #define SET_KP
+    //#define SET_KI
+    //#define SET_KD
+
     Serial.print("\t");
-    Serial.print(K_p[0]);
+    Serial.print(K_p[1]);
     Serial.print("\t");
-    Serial.print(K_i[0]);
+    Serial.print(K_i[1]);
     Serial.print("\t");
-    Serial.println(pid_right_motor(count_left_wheel)/20.0);
+    Serial.println(K_d[1]);
+
 
     setpointW[LEFT_WHEEL]  = 3;
-    setpointW[RIGHT_WHEEL] = 3;
+    setpointW[RIGHT_WHEEL] = 0;
 
-    if (T > 4){
-      set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_RPS));
-      //set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
-    }
     if (T > 8){
       set_wheel_speed(LEFT_WHEEL,   FORWARD, 0);
       set_wheel_speed(RIGHT_WHEEL,  FORWARD, 0);
-      T = 0;
       i++;
+      T = 0;
 
-      K_i[0] = 5*i;
-      K_i[1] = 5*i;
+      #ifdef SET_KP
+
+        K_p[0] = 30*i;
+        K_p[1] = 30*i;
+
+      #elif defined(SET_KI)
+
+        K_i[0] = 100*i;
+        K_i[1] = 100*i;
+
+      #elif defined(SET_KD)
+
+        K_d[0] = 3*i;
+        K_d[1] = 3*i;
+
+      #endif
+
 
       I_prev[0] = 0;
-      I_prev[1] = 0;
-
-    }
-
-  #endif
-
-// Para calibrar los parametros del PID usando Python (ignorar)
-#ifdef CALIBRATION_PYTHON
-
-    Serial.print("\t");
-    Serial.print(K_p[0]);
-    Serial.print("\t");
-    Serial.print(K_i[0]);
-    Serial.print("\t");
-    Serial.println(pid_right_motor(count_left_wheel)/20.0);
-
-    setpointW[LEFT_WHEEL]  = 3;
-    setpointW[RIGHT_WHEEL] = 3;
-
-    if (state == "TESTING"){
-      if (T > 4){
-        set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_RPS));
-        //set_wheel_speed(RIGHT_WHEEL, FORWARD, feedforward[RIGHT_WHEEL]);
-      }
-      if (T > 8){
-        set_wheel_speed(LEFT_WHEEL,   FORWARD, 0);
-        set_wheel_speed(RIGHT_WHEEL,  FORWARD, 0);
-        T = 0;
-        i++;
-
-        if (K_i[0] != 0){
-          K_i[0] = i;
-          K_i[1] = i;
-        }
-
-        else{
-          K_p[0] = i;
-          K_p[1] = i;
-        }
-        
-
-        I_prev[0] = 0;
         I_prev[1] = 0;
 
-        state = (K_p[0] < 20) ? "TESTING" : "WAITING";
-
-      }
     }
-    else{
-      set_wheel_speed(LEFT_WHEEL,   FORWARD, 0);
-      set_wheel_speed(RIGHT_WHEEL,  FORWARD, 0);
-      if (Serial.available() > 0) {
-        // Leer el dato enviado por Python
-        String data = Serial.readStringUntil('\n');
-        
-        // Convertir el dato a un número flotante
-        K_p[0] = data.toFloat();
+    else if (T > 4){
+      set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_RPS));
+      set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_RPS));
 
-        // Imprimir el valor de Kp en el monitor serial
-        Serial.print("Valor de Kp recibido: ");
-        Serial.println(K_p[0]);
-
-        state = "TESTING";
-        K_i[0] = 0.1;
-        K_i[1] = 0.1;
+      // Esto es para que no pinte la primera (que viene por defecto, evito tener que ponerlas a 0)
+      if (i == 0){
+        set_wheel_speed(LEFT_WHEEL,  FORWARD, 0);
+        set_wheel_speed(RIGHT_WHEEL, FORWARD, 0);
       }
+
+
     }
 
   #endif
-
 
 
 
@@ -498,19 +476,23 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   #ifdef TEST
 
     Serial.print("\t");
-    Serial.println(pid_right_motor(count_left_wheel)/20.0);
+    Serial.println(setpointW[0]);
 
     set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_RPS));
     set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_RPS));
+    //set_wheel_speed(RIGHT_WHEEL, FORWARD, feedforward(RIGHT_WHEEL));
+    //set_wheel_speed(LEFT_WHEEL,  FORWARD, 150);
+
+
 
     if (T > 4){
-      setpointW[LEFT_WHEEL]  = 3;
-      setpointW[RIGHT_WHEEL] = 3;  
+      setpointW[LEFT_WHEEL]  = 3.4;
+      setpointW[RIGHT_WHEEL] = 3.4;  
       
     }
     if (T > 8){
-      setpointW[LEFT_WHEEL]  = 2;
-      setpointW[RIGHT_WHEEL] = 2;
+      setpointW[LEFT_WHEEL]  = 2.7;
+      setpointW[RIGHT_WHEEL] = 2.7;
       T = 0;
       i++;
     }
@@ -520,19 +502,24 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
   // Para sacar la relacion entre RPM y PWM
   #ifdef STEADY_STATE
-
-    int PWM = 70 + 5*i;
-
-    Serial.print("\t");
-    Serial.println(PWM);
-
+    
     if (T > 4){
-      set_wheel_speed(LEFT_WHEEL,  FORWARD, PWM);
-      set_wheel_speed(RIGHT_WHEEL, FORWARD, PWM);
+
+      //stop();
+      //delay(100);
 
       T = 0;
       i = ((70 + 5*i) == MAXPWM) ? 0 : i + 1;
+      int PWM = 70 + 5*i;
+
+      set_wheel_speed(LEFT_WHEEL,  FORWARD, PWM);
+      set_wheel_speed(RIGHT_WHEEL, FORWARD, PWM);
+
     }
+
+    int PWM = 70 + 5*i;
+    Serial.print("\t");
+    Serial.println(PWM);
 
   #endif
 
@@ -541,87 +528,19 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
     Serial.println("\t");   // Para poner un salto de linea, sino el Serial monitor no funciona
 
-    setpointW[LEFT_WHEEL]  = 10;
-    setpointW[RIGHT_WHEEL] = 10;
+    double speed = 2.5;
+    setpointW[LEFT_WHEEL]  = speed;
+    setpointW[RIGHT_WHEEL] = speed;
 
-    set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_RPS));
-    set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_RPS));
-    //set_wheel_speed(RIGHT_WHEEL, FORWARD, feedforward(LEFT_WHEEL));
+    //set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_RPS));
+    //set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_RPS));
+
+    set_wheel_speed(LEFT_WHEEL,  FORWARD, 150);
+    set_wheel_speed(RIGHT_WHEEL, FORWARD, 150);
 
   #endif
 
 
-
-  //set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
-  //set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
-
-  //set_wheel_speed(LEFT_WHEEL,   FORWARD, 100);
-  //set_wheel_speed(RIGHT_WHEEL,  FORWARD, 100);
-
-  
-  /*
-  if (distance <= 1.5){
-    set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
-    set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
-  }
-  else{
-    set_wheel_speed(LEFT_WHEEL,   FORWARD, 0);
-    set_wheel_speed(RIGHT_WHEEL,  FORWARD, 0);
-
-  }
-  */
-  
-/*
-
-  float user_d=0;
-  float vel_enc_d=0;
-  float vel_enc_iz=0;
-
-  user_lw+=count_left_wheel;
-  user_rw+=count_right_wheel;
-  t_tot+=dt_s;
-  
-  Serial.print("Kp:\t");
-  Serial.print(K_p[0]);
-  Serial.println(K_p[1]);
-  Serial.print("Ki:\t");
-  Serial.print(K_i[0]);
-  Serial.println(K_i[1]);
-  
-  setpointW[0]=0.0;
-  setpointW[1]=10;
-  
-  vel_enc_d=count_right_wheel/t_tot;
-  vel_enc_iz=count_left_wheel/t_tot;
-  Serial.print("Velocidad encoder:\t");
-  Serial.print(vel_enc_d);
-  Serial.print("\t");
-  Serial.println(vel_enc_iz);
-  
-  rw_vel=pid_right_motor(vel_enc_d);
-  lw_vel=pid_left_motor(vel_enc_iz); 
-  Serial.print("Reference vel:\t");
-  Serial.print(setpointW[0]);
-  Serial.print("\t");
-  Serial.println(setpointW[1]);
-  Serial.print("Real vel:\t");
-  //Serial.print(rw_vel);
-  Serial.print(count_right_wheel);
-  Serial.print("\t");
-  //Serial.println(lw_vel);
-  Serial.println(count_left_wheel);
-  set_wheel_speed(LEFT_WHEEL,FORWARD,lw_vel);
-  set_wheel_speed(RIGHT_WHEEL,FORWARD,rw_vel);
-
-  //distancia += 
-  Serial.println(user_lw);
-  Serial.println(t_tot);
-  if (user_lw < 100) {
-    set_wheel_speed(LEFT_WHEEL,FORWARD, 200);
-    set_wheel_speed(RIGHT_WHEEL,FORWARD, 200);
-  }
-
-  */
 
   
 }

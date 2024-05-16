@@ -22,12 +22,12 @@
 using namespace std;
 
 // H-BRIDGE - Uncomment only one option
-//#define H_BRIDGE_RED 
-#define H_BRIDGE_BLACK  
+#define H_BRIDGE_RED 
+//#define H_BRIDGE_BLACK  
 
 // ARDUINO - Uncomment only one option
-#define ARDUINO_TYPE_EVERIS  
-//#define ARDUINO_TYPE_MKR  
+//#define ARDUINO_TYPE_EVERIS  
+#define ARDUINO_TYPE_MKR  
 
 // THE COMPANY - Uncomment only one option
 // #define MERRY
@@ -38,21 +38,24 @@ using namespace std;
 // -----------------------------------------------------------------------------
 // PIN layout
 // -----------------------------------------------------------------------------
-#define LED_RING        4  //  LED_RING
-#define NUMPIXELS 16  // Numero de pixels
-Adafruit_NeoPixel pixels(NUMPIXELS, LED_RING, NEO_GRB + NEO_KHZ400);
+#define LED_RING   3  //  LED_RING
+const int LED_RING = 3;  //  LED_RING
+
 
 #ifdef ARDUINO_TYPE_MKR
 
   const int pin_left_encoder          = 0;
   const int pin_right_encoder         = 1;
-  const int pin_LED                   = 6;
+  Adafruit_NeoPixel pixels(NUMPIXELS, LED_RING, NEO_GRB + NEO_KHZ800);    // Por motivos extraños, cambia segun el arduino
+
 #endif
 
 #ifdef ARDUINO_TYPE_EVERIS
 
   const int pin_left_encoder          = 2;
   const int pin_right_encoder         = 3;
+  Adafruit_NeoPixel pixels(NUMPIXELS, LED_RING, NEO_GRB + NEO_KHZ400);    // Por motivos extraños, cambia segun el arduino
+
 #endif
 
 #ifdef H_BRIDGE_BLACK
@@ -79,7 +82,7 @@ const int   RIGHT_WHEEL = 1;
 const int   PIN_SHARP = 1;
 const float R = 0.0325;       // Radio en m
 const int   NT = 40;          // Numero de muescas del encoder
-const float L_EJE = 0.107;    // Distancia entre ruedas
+const float L_EJE = 0.107;    // Distancia entre ruedas (en m)
 
 #define PI 3.14159265358979323846//...
 
@@ -114,7 +117,7 @@ void set_wheel_speed(int wheel, int direction, int speed) {
 // -----------------------------------------------------------------------------
 // Encoders
 // -----------------------------------------------------------------------------
-const int encoder_resolution_ppt = 20*2;
+const int encoder_resolution_ppt = NT;
 int filter_window_size = 10;
 unsigned long encoder_count[2] = {0, 0};
 MeanFilter<double> encoder_w_estimated[2] = {
@@ -307,13 +310,13 @@ double user_rw = 0;
 
 double t_tot=0;
 
-int user_state = "FORWARD";
+//int user_state = "FORWARD";
 
 // -----------------------------------------------------
 // Coordenadas en las que se encuentra el robot
 double theta = PI/2;  // Angulo hacia el que apunta el robot
-double x0 = 0;
-double y0 = 0;
+//double x0 = 0;
+//double y0 = 0;
 
 // Coordenadas a las que quiere ir
 double x = -0.5;
@@ -352,7 +355,7 @@ void move_forward(double speed, double count_left_wheel, double count_right_whee
 
 
 // ------------------------------------------------------------------------------------
-// Esta es para girar sobre si mismo
+// Esta es para girar sobre si mismo (En la versión actual con una rueda)
 void turn_left(double count_left_wheel, double count_right_wheel){
     //Serial.print("Girando izquierda ...");
     turn(LEFT, count_left_wheel, count_right_wheel);
@@ -366,14 +369,14 @@ void turn_right(double count_left_wheel, double count_right_wheel){
 
 void turn(int TURN, double count_left_wheel, double count_right_wheel) {
 
-    setpointW[LEFT_WHEEL]  = 2.5;
-    setpointW[RIGHT_WHEEL] = 2.5;
+    setpointW[LEFT_WHEEL]  = 2.0;
+    setpointW[RIGHT_WHEEL] = 2.0;
 
-    double count = (TURN == LEFT) ? count_right_wheel : count_left_wheel;
+    /*double count = (TURN == LEFT) ? count_right_wheel : count_left_wheel;
     int wheel = (TURN == RIGHT) ? LEFT_WHEEL : RIGHT_WHEEL;
-    set_wheel_speed(wheel,  FORWARD,  pid(wheel, count));
-    //set_wheel_speed(LEFT_WHEEL,  !TURN,  pid_left_motor(count_left_wheel));
-    //set_wheel_speed(RIGHT_WHEEL,  TURN,  pid_left_motor(count_right_wheel));
+    set_wheel_speed(wheel,  FORWARD,  pid(wheel, count));*/
+    set_wheel_speed(LEFT_WHEEL,  !TURN,  pid_left_motor(count_left_wheel));
+    set_wheel_speed(RIGHT_WHEEL,  TURN,  pid_left_motor(count_right_wheel));
 
 
 }
@@ -484,9 +487,9 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // ELEGIR LO QUE SE QUIERE HACER #############################
 
   //#define CIRCLE        // Sirve para hacer circulos
-  #define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
+  //#define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
   //#define POINT         // Sirve para hacer que se mueva a las coordenadas requeridas
-  //#define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
+  #define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
   //#define TEST
   // Si no usas ninguno se queda parado
 
@@ -501,8 +504,8 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   #elif defined(SQUARE) // Sirve para hacer cuadrados o para hacer una linea recta
 
     double L_SQUARE =  0.8;     // Este es el lado del cuadrado(m)/longitud de la linea
-    int LINE = 2;               // 1 para cuadrados, 2 para rectas
-    double speed = 3;
+    int LINE = 1;               // 1 para cuadrados, 2 para rectas
+    double speed = 2.25;
 
     if (user_state == "FORWARD"){
       move_forward(speed, count_left_RPS, count_right_RPS);
@@ -513,7 +516,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     }
     else if (user_state == "TURN"){
       turn_left(count_left_RPS, count_right_RPS);
-      if (distance_RIGHT >= turn_distance(90*LINE)){
+      if (distance_RIGHT >= turn_distance(270/2*LINE)){
         user_state = "FORWARD";
         reset_state(200);
       }
@@ -523,7 +526,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     }
 
   // #########################################################################
-  #elif defined(POINT) // Sirve para hacer que se mueva a las coordenadas requeridas
+  #elif defined(POINT) // Sirve para hacer que se mueva a las coordenadas requeridas (pendiente de terminar)
 
     // Coordenadas en metros
     double speed = 2.75;
@@ -563,7 +566,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
     if ((fabs(x0 - x) > epsilon*0.4) || (fabs(y0 - y) > epsilon*0.4)){
 
-      // Alinea el robot hacia el punto correcto
+      // Alinea el robot hacia el punto correcto (REVISAR)
       if (fabs(phi - theta) > 2*epsilon){    
         if (normalize_angle(theta - phi) < PI){
           turn_right(count_left_RPS, count_right_RPS);
@@ -619,7 +622,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(MOVE_NO_PID)
 
-    int PWM = 120;
+    int PWM = 200;
     
     set_wheel_speed(LEFT_WHEEL,  FORWARD,  PWM);
     set_wheel_speed(RIGHT_WHEEL, FORWARD,  PWM);

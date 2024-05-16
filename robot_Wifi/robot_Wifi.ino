@@ -24,9 +24,11 @@
 
 using namespace std;
 
+//#define USE_WIFI  // Quitar para no usar el Wifi
+
 // H-BRIDGE - Uncomment only one option
-//#define H_BRIDGE_RED 
-#define H_BRIDGE_BLACK  
+#define H_BRIDGE_RED 
+//#define H_BRIDGE_BLACK  
 
 // ARDUINO - Uncomment only one option
 //#define ARDUINO_TYPE_EVERIS  
@@ -36,11 +38,12 @@ using namespace std;
 // #define MERRY
 // #define FRODO
 // #define SAM
-#define ALEJANDRO
+//#define ALEJANDRO_NANO
+#define ALEJANDRO_MKR
 
 // Wifi - Uncomment only one option
-//#define ROBOTARIUM
-#define WIFI_CASA
+#define ROBOTARIUM
+//#define WIFI_CASA
 
 // ##########################################################
 // ###################### PIN LAYOUT ######################
@@ -78,7 +81,7 @@ const int LED_RING = 3;  //  LED_RING
   const int pin_left_motor_enable  = 6;
   const int pin_right_motor_dir_1  = 7;
   const int pin_right_motor_dir_2  = 8;
-  const int pin_right_motor_enable = 9;
+  const int pin_right_motor_enable = 2;
 #endif
 
 
@@ -88,11 +91,11 @@ const int LED_RING = 3;  //  LED_RING
 
 #ifdef ROBOTARIUM
   
-  char ssid[] = "Robotarium";   // your network SSID (name)
-  char pass[] = "robotarium";   // your network password (use for WPA, or use as key for WEP)/
+  char ssid[] = "RobotariumUCM";   // your network SSID (name)
+  char pass[] = "robotario";   // your network password (use for WPA, or use as key for WEP)/
 
-  IPAddress ip_arduino1(192,168,78,6);
-  IPAddress ip_server(192,168,78,2);
+  IPAddress ip_arduino1(192,168,10,6);
+  IPAddress ip_server(192,168,10,1);
 
 #elif defined(WIFI_CASA)
   
@@ -106,8 +109,8 @@ const int LED_RING = 3;  //  LED_RING
 
 /*-----------ip setup-----------------*/
 WiFiUDP Udp;
-unsigned int localPort = 4244;      // local port to listen on
-int ServerPort = 4240;
+unsigned int localPort = 5555;      // local port to listen on
+int ServerPort = 5556;
 char packetBuffer[256];             //buffer to hold incoming packet
 
 int status = WL_IDLE_STATUS;
@@ -153,8 +156,10 @@ const float L_EJE = 0.107;    // Distancia entre ruedas (en m)
 
 #define FORWARD LOW
 #define BACKWARD HIGH
-#define MINPWM 80
+#define MINPWM 100
 #define MAXPWM 200
+double LIMIT_PWM[2] = {200.0, 200.0};
+
 
 #define LEFT  0
 #define RIGHT 1
@@ -208,13 +213,16 @@ void isr_encoder_count(int pin) {
 // ########################## SETUP ######################### 
 // ##########################################################
 void setup() {
-  setup_Wifi();
+
+  #ifdef USE_WIFI
+    setup_Wifi();
+  #endif
   setup_motors();
   setup_encoders();
   setup_comms();
-  //setup_pixels();
+  setup_pixels();
 
-  delay(500);
+  //delay(500);
 }
 
 void setup_Wifi(){
@@ -290,7 +298,7 @@ void setup_pixels() {
     pixels.setPixelColor(i, pixels.Color(255, 0, 0));   // (RGB)
   }
   for(int i=1; i<16; i+=2){
-    pixels.setPixelColor(i, pixels.Color(0, 0, 255));
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0));
   }
   pixels.show();
 
@@ -309,30 +317,34 @@ void loop() {
   unsigned long current_time_us = micros();  
   unsigned long dt_us = current_time_us - last_time_us; 
 
-  bool serialCom;
-  int packetSize = Udp.parsePacket();
+  #ifdef USE_WIFI
 
-  if (packetSize) {//se comprueba si se recibe un paquete
-    IPAddress remoteIp = Udp.remoteIP();//proviene del servidor u ordenador central
-    int numbytes = Udp.read((byte*)packetBuffer, MAXDATASIZE); //se guardan los datos en el buffer
-    server_operation= (struct appdata*)&packetBuffer;
-    char temp[server_operation->len + 1];
+    bool serialCom;
+    int packetSize = Udp.parsePacket();
 
-    switch (server_operation->op){
-      case OP_SALUDO:
-        Serial.print("Case 1: ");
-        memcpy(temp, server_operation->data, server_operation->len);
-        data_received = temp[0];
-        Serial.println(data_received); // Salto de línea para mayor claridad
-        break;
-      case OP_MOVE_WHEEL:
-        Serial.println("Case 2");            
-        break;
-      default:
-        Serial.println("Case 3");     
-        break;        
+    if (packetSize) { //se comprueba si se recibe un paquete
+      IPAddress remoteIp = Udp.remoteIP(); //proviene del servidor u ordenador central
+      int numbytes = Udp.read((byte*)packetBuffer, MAXDATASIZE); //se guardan los datos en el buffer
+      server_operation= (struct appdata*)&packetBuffer;
+      char temp[server_operation->len + 1];
+
+      switch (server_operation->op){
+        case OP_SALUDO:
+          Serial.print("Case 1: ");
+          memcpy(temp, server_operation->data, server_operation->len);
+          data_received = temp[0];
+          Serial.println(data_received); // Salto de línea para mayor claridad
+          break;
+        case OP_MOVE_WHEEL:
+          Serial.println("Case 2");            
+          break;
+        default:
+          Serial.println("Case 3");     
+          break;        
+      }
     }
-  }
+
+  #endif
 
   /*
   else if(Serial.available()){
@@ -402,12 +414,20 @@ void loop() {
 #endif
 
 // Estos son los buenos para el mio
-#ifdef ALEJANDRO
+#ifdef ALEJANDRO_NANO
   double K_p[2] = {10, 10};
   double K_i[2] = {0, 0};
   double K_d[2] = {0.0, 0.0};
   double a_ff[2] = {-15, -30};
   double b_ff[2] = {2.35/(MAXPWM - MINPWM), 2.00/(MAXPWM - MINPWM)};
+#endif
+
+#ifdef ALEJANDRO_MKR
+  double K_p[2] = {60, 60};
+  double K_i[2] = {250, 250};
+  double K_d[2] = {1.0, 1.0};
+  double a_ff[2] = {-25, -140};
+  double b_ff[2] = {1.83/(MAXPWM - MINPWM), 1.07/(MAXPWM - MINPWM)};
 #endif
 
 
@@ -432,22 +452,26 @@ int pid(int motor, double w) {
   unsigned long current_time = millis();
   double elapsed_time = current_time - previous_time_ms[motor];
   double error = setpointW[motor] - w;
-  double u0 = feedforward(motor); 
+  double u0 = feedforward(motor);
+  LIMIT_PWM[motor] = (1.2*u0 <= 200) ? 1.2*u0 : 200.0;  // Para evitar overshoot muy grande
   double P = K_p[motor]*error;
   double I = I_prev[motor] + K_i[motor]*error*elapsed_time*1e-3;
-  //double D = K_d[motor]*(error - previous_error[motor]) / elapsed_time;
-  double D = (elapsed_time == 0) ? 0 : K_d[motor]*(error - previous_error[motor]) / elapsed_time;
+  double D = (elapsed_time == 0) ? 0 : K_d[motor]*(error - previous_error[motor]) / (elapsed_time*1e-3);
   double u = u0 + P+I+D;
-  double v = constrain(u, MINPWM, MAXPWM);
+  double v = constrain(u, MINPWM, LIMIT_PWM[motor]);
   if((u - v)*error <= 0) {
     I_prev[motor] = I;
   }
+
   previous_error[motor] = error;
   previous_time_ms[motor] = current_time;
   return static_cast<int> (round(v));
 }
 
 int feedforward(int motor) {
+  /*return (setpointW[motor] != 0.0) ? constrain(
+    round((setpointW[motor] + a_ff[motor]) / b_ff[motor]), MINPWM, MAXPWM
+  ) : 0;*/
   return (setpointW[motor] != 0.0) ? constrain(
     round(a_ff[motor]+(setpointW[motor] / b_ff[motor])), MINPWM, MAXPWM
   ) : 0;    
@@ -463,7 +487,7 @@ double user_rw = 0;
 
 double t_tot=0;
 
-//int user_state = "FORWARD";
+String user_state = "FORWARD";
 
 // -----------------------------------------------------
 // Coordenadas en las que se encuentra el robot
@@ -480,7 +504,7 @@ double epsilon = 0.1;  // Para tener en cuenta el error
 // -----------------------------------------------------
 
 int i = 1;
-double angle = 90.0;  //  Se usa para el test
+double angle = 180.0;  //  Se usa para el test
 
 
 
@@ -494,8 +518,8 @@ void move_forward(double speed, double count_left_wheel, double count_right_whee
 
 
     if ((count_left_wheel < 1.75) || (count_right_wheel < 1.75)){
-      setpointW[LEFT_WHEEL]  = 2.5;
-      setpointW[RIGHT_WHEEL] = 2.5;
+      setpointW[LEFT_WHEEL]  = 2.2;
+      setpointW[RIGHT_WHEEL] = 2.2;
     }
     else{
       setpointW[LEFT_WHEEL]  = speed;
@@ -522,8 +546,8 @@ void turn_right(double count_left_wheel, double count_right_wheel){
 
 void turn(int TURN, double count_left_wheel, double count_right_wheel) {
 
-    setpointW[LEFT_WHEEL]  = 2.0;
-    setpointW[RIGHT_WHEEL] = 2.0;
+    setpointW[LEFT_WHEEL]  = 2.25;
+    setpointW[RIGHT_WHEEL] = 2.25;
 
     /*double count = (TURN == LEFT) ? count_right_wheel : count_left_wheel;
     int wheel = (TURN == RIGHT) ? LEFT_WHEEL : RIGHT_WHEEL;
@@ -551,7 +575,7 @@ void turn_radius(int TURN, double radius, double count_left_wheel, double count_
     turn(TURN, count_left_wheel, count_right_wheel);
   }
   else{
-    setpointW[TURN]  = 2.0;
+    setpointW[TURN]  = 2.5;
     setpointW[!TURN] = setpointW[TURN]*(2*radius + L_EJE)/(2*radius - L_EJE);      
 
     set_wheel_speed(LEFT_WHEEL,  FORWARD,  pid_left_motor(count_left_wheel));
@@ -593,10 +617,10 @@ double normalize_angle(double angle){
 
 }
 
-// Para que gire un angulo determinado
+// Para calcular cuanto tiene que girar
 double turn_distance(double angle){
 
-  return 2*PI*L_EJE*(angle/360.0);
+  return PI*L_EJE*(angle/360.0);
 
 }
 
@@ -607,7 +631,7 @@ double turn_distance(double angle){
 
 void update_control(double count_left_wheel, double count_right_wheel, double dt_s) {
 
-  //pixels.clear();
+  pixels.clear();
   
 
   user_lw += count_left_wheel;
@@ -626,7 +650,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
   //Serial.print(dt_s);
   //Serial.print("\t");
-  /*Serial.print("Velocidad encoder (RPS):  ");
+  Serial.print("Velocidad encoder (RPS):  ");
   Serial.print(count_left_RPS);
   Serial.print("\t");
   Serial.print(count_right_RPS);
@@ -634,15 +658,15 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
   Serial.print("Distancia (m):  ");
   Serial.print(distance);
-  Serial.print("\t");*/
+  Serial.print("\t");
 
 
   // ELEGIR LO QUE SE QUIERE HACER #############################
 
   //#define CIRCLE        // Sirve para hacer circulos
-  //#define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
+  #define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
   //#define POINT         // Sirve para hacer que se mueva a las coordenadas requeridas
-  #define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
+  //#define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
   //#define TEST
   // Si no usas ninguno se queda parado
 
@@ -656,22 +680,22 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(SQUARE) // Sirve para hacer cuadrados o para hacer una linea recta
 
-    double L_SQUARE =  0.8;     // Este es el lado del cuadrado(m)/longitud de la linea
-    int LINE = 1;               // 1 para cuadrados, 2 para rectas
-    double speed = 2.25;
+    double L_SQUARE =  1.0;     // Este es el lado del cuadrado(m)/longitud de la linea
+    int LINE = 2;               // 1 para cuadrados, 2 para rectas
+    double speed = 2.5;
 
     if (user_state == "FORWARD"){
       move_forward(speed, count_left_RPS, count_right_RPS);
       if (distance >= L_SQUARE){
         user_state = "TURN";
-        reset_state(300);
+        reset_state(1500);
       }
     }
     else if (user_state == "TURN"){
       turn_left(count_left_RPS, count_right_RPS);
-      if (distance_RIGHT >= turn_distance(270/2*LINE)){
+      if (distance_LEFT >= turn_distance(90*LINE)){
         user_state = "FORWARD";
-        reset_state(200);
+        reset_state(500);
       }
     }
     else{ // Por si acaso
@@ -758,11 +782,11 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
     turn_left(count_left_RPS, count_right_RPS);
     
-    if (distance_RIGHT >= turn_distance(angle)){
+    if (distance >= turn_distance(angle)){
       Serial.print("Grados Girados: ");
       Serial.print(angle);
-      angle += 90.0;
-      pixels.setPixelColor(i, pixels.Color(0, 255, 0));
+      angle += 45.0;
+      pixels.setPixelColor(2*(i-1), pixels.Color(0, 255, 0));
       pixels.show();
       i++;
       reset_state(3000);
@@ -788,7 +812,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   #endif
 
 
-  //Serial.println("\t"); // Para que funcione bien el serial_monitor
+  Serial.println("\t"); // Para que funcione bien el serial_monitor
   //
   //
   //
