@@ -42,8 +42,8 @@ using namespace std;
 #define ALEJANDRO_MKR
 
 // Wifi - Uncomment only one option
-#define ROBOTARIUM
-//#define WIFI_CASA
+//#define ROBOTARIUM
+#define WIFI_CASA
 
 // ##########################################################
 // ###################### PIN LAYOUT ######################
@@ -96,21 +96,22 @@ const int LED_RING = 3;  //  LED_RING
 
   IPAddress ip_arduino1(192,168,10,6);
   IPAddress ip_server(192,168,10,1);
+  unsigned int localPort = 4244;      // local port to listen on
 
 #elif defined(WIFI_CASA)
   
-  char ssid[] = "WLAN_JLR";       // your network SSID (name)
-  char pass[] = "1234567890";     // your network password (use for WPA, or use as key for WEP)
+  char ssid[] = "your_home_wifi";       // your network SSID (name)
+  char pass[] = "your_password";        // your network password (use for WPA, or use as key for WEP)
 
   IPAddress ip_arduino1(192,168,1,50);
   IPAddress ip_server(192,168,1,100);
+  unsigned int localPort = 4244;      // local port to listen on
 
 #endif
 
 /*-----------ip setup-----------------*/
 WiFiUDP Udp;
-unsigned int localPort = 5555;      // local port to listen on
-int ServerPort = 5556;
+int ServerPort = 5556;  // Esto diria que no esta haciendo nada
 char packetBuffer[256];             //buffer to hold incoming packet
 
 int status = WL_IDLE_STATUS;
@@ -214,16 +215,31 @@ void isr_encoder_count(int pin) {
 // ##########################################################
 void setup() {
 
+  setup_pixels();
   #ifdef USE_WIFI
     setup_Wifi();
   #endif
   setup_motors();
   setup_encoders();
   setup_comms();
-  setup_pixels();
 
   //delay(500);
 }
+
+void setup_pixels() {
+  pixels.begin();
+
+  /*for(int i=0; i<16; i+=2){
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0));   // (RGB)
+  }
+  for(int i=1; i<16; i+=2){
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0));
+  }*/
+  pixels.fill(pixels.Color(255, 0, 0));
+  pixels.show();
+
+}
+
 
 void setup_Wifi(){
 
@@ -256,6 +272,8 @@ void setup_Wifi(){
   Serial.println("\nStarting connection to server...");
   // if you get a connection, report back via serial:
   Udp.begin(localPort);//se prepara el puerto para escuchar
+  pixels.fill(pixels.Color(0, 255, 0));
+  pixels.show();
 
 }
 
@@ -291,19 +309,6 @@ void setup_comms() {
   Serial.begin(115200);
 }
 
-void setup_pixels() {
-  pixels.begin();
-
-  for(int i=0; i<16; i+=2){
-    pixels.setPixelColor(i, pixels.Color(255, 0, 0));   // (RGB)
-  }
-  for(int i=1; i<16; i+=2){
-    pixels.setPixelColor(i, pixels.Color(255, 0, 0));
-  }
-  pixels.show();
-
-}
-
 // ##########################################################
 // ###################### CONTROL LOOP ###################### 
 // ##########################################################
@@ -326,13 +331,12 @@ void loop() {
       IPAddress remoteIp = Udp.remoteIP(); //proviene del servidor u ordenador central
       int numbytes = Udp.read((byte*)packetBuffer, MAXDATASIZE); //se guardan los datos en el buffer
       server_operation= (struct appdata*)&packetBuffer;
-      char temp[server_operation->len + 1];
+      //char temp[server_operation->len + 1];
 
       switch (server_operation->op){
         case OP_SALUDO:
           Serial.print("Case 1: ");
-          memcpy(temp, server_operation->data, server_operation->len);
-          data_received = temp[0];
+          memcpy(&data_received, server_operation->data, sizeof(double));
           Serial.println(data_received); // Salto de línea para mayor claridad
           break;
         case OP_MOVE_WHEEL:
@@ -453,7 +457,8 @@ int pid(int motor, double w) {
   double elapsed_time = current_time - previous_time_ms[motor];
   double error = setpointW[motor] - w;
   double u0 = feedforward(motor);
-  LIMIT_PWM[motor] = (1.2*u0 <= 200) ? 1.2*u0 : 200.0;  // Para evitar overshoot muy grande
+  LIMIT_PWM[motor] = (1.2*u0 <= 200) ? 1.2*u0 : MAXPWM;  // Para evitar overshoot muy grande
+  LIMIT_PWM[motor] = (1.2*u0 >= 100) ? 1.2*u0 : MINPWM;
   double P = K_p[motor]*error;
   double I = I_prev[motor] + K_i[motor]*error*elapsed_time*1e-3;
   double D = (elapsed_time == 0) ? 0 : K_d[motor]*(error - previous_error[motor]) / (elapsed_time*1e-3);
@@ -517,22 +522,23 @@ double angle = 180.0;  //  Se usa para el test
 void move_forward(double speed, double count_left_wheel, double count_right_wheel) {
 
 
-    if ((count_left_wheel < 1.75) || (count_right_wheel < 1.75)){
+    /*if ((count_left_wheel < 1.75) || (count_right_wheel < 1.75)){
       setpointW[LEFT_WHEEL]  = 2.2;
       setpointW[RIGHT_WHEEL] = 2.2;
     }
-    else{
+    else{*/
       setpointW[LEFT_WHEEL]  = speed;
       setpointW[RIGHT_WHEEL] = speed;
-    }
+    //}
 
-    set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
-    set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
+  set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
+  set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
+
 }
 
 
 // ------------------------------------------------------------------------------------
-// Esta es para girar sobre si mismo (En la versión actual con una rueda)
+// Esta es para girar sobre si mismo
 void turn_left(double count_left_wheel, double count_right_wheel){
     //Serial.print("Girando izquierda ...");
     turn(LEFT, count_left_wheel, count_right_wheel);
@@ -552,8 +558,12 @@ void turn(int TURN, double count_left_wheel, double count_right_wheel) {
     /*double count = (TURN == LEFT) ? count_right_wheel : count_left_wheel;
     int wheel = (TURN == RIGHT) ? LEFT_WHEEL : RIGHT_WHEEL;
     set_wheel_speed(wheel,  FORWARD,  pid(wheel, count));*/
-    set_wheel_speed(LEFT_WHEEL,  !TURN,  pid_left_motor(count_left_wheel));
-    set_wheel_speed(RIGHT_WHEEL,  TURN,  pid_left_motor(count_right_wheel));
+    //set_wheel_speed(LEFT_WHEEL,  !TURN,  pid_left_motor(count_left_wheel));
+    //set_wheel_speed(RIGHT_WHEEL,  TURN,  pid_left_motor(count_right_wheel));
+
+    // +10 por seguridad
+    set_wheel_speed(LEFT_WHEEL,  !TURN,  MINPWM+30);
+    set_wheel_speed(RIGHT_WHEEL,  TURN,  MINPWM+10);
 
 
 }
@@ -571,7 +581,7 @@ void turn_radius_right(double radius, double count_left_wheel, double count_righ
 
 void turn_radius(int TURN, double radius, double count_left_wheel, double count_right_wheel){
   
-  if (radius <= L_EJE/2){     // Ten en cuenta que el diametro minimo es L_EJE;
+  if (radius <= L_EJE/2){     // Ten en cuenta que el diametro minimo es L_EJE/2;
     turn(TURN, count_left_wheel, count_right_wheel);
   }
   else{
@@ -583,6 +593,31 @@ void turn_radius(int TURN, double radius, double count_left_wheel, double count_
   }
 
 }
+
+// ------------------------------------------------------------------------------------
+
+// Gira ligeramente para corregir la trayectoria
+void turn_light_left(double count_left_wheel, double count_right_wheel){
+  turn_light(LEFT, count_left_wheel, count_right_wheel);
+}
+
+void turn_light_right(double count_left_wheel, double count_right_wheel){
+  turn_light(RIGHT, count_left_wheel, count_right_wheel);
+}
+
+void turn_light(int TURN, double count_left_wheel, double count_right_wheel){
+
+  double speed = 2.7;
+
+  setpointW[!TURN] = speed;
+  setpointW[TURN]  = speed*0.75;
+  
+
+  set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
+  set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
+
+}
+
 
 // ------------------------------------------------------------------------------------
 
@@ -617,10 +652,10 @@ double normalize_angle(double angle){
 
 }
 
-// Para calcular cuanto tiene que girar
+// Para calcular cuanto tiene que girar (Ajustado para evitar errores. Usar con angulos mayores de 180º)
 double turn_distance(double angle){
 
-  return PI*L_EJE*(angle/360.0);
+  return PI*L_EJE*((angle-100)/360.0);
 
 }
 
@@ -667,13 +702,14 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   #define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
   //#define POINT         // Sirve para hacer que se mueva a las coordenadas requeridas
   //#define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
-  //#define TEST
+  //#define TEST          // Para analizar el error en el giro
+  //#define TEST_WIFI     // Para analizar el error en el giro usando Wifi (usar esta, es mucho más comoda)
   // Si no usas ninguno se queda parado
 
   // #########################################################################
   #ifdef CIRCLE // Sirve para hacer circulos
 
-    double radius = 0.30;
+    double radius = 0.3085;
     turn_radius_left(radius, count_left_RPS, count_right_RPS);
 
 
@@ -681,19 +717,30 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   #elif defined(SQUARE) // Sirve para hacer cuadrados o para hacer una linea recta
 
     double L_SQUARE =  1.0;     // Este es el lado del cuadrado(m)/longitud de la linea
-    int LINE = 2;               // 1 para cuadrados, 2 para rectas
-    double speed = 2.5;
+    int LINE = 0;               // 1 para cuadrados, 0 para rectas
+    double speed = 2.8;
 
     if (user_state == "FORWARD"){
       move_forward(speed, count_left_RPS, count_right_RPS);
       if (distance >= L_SQUARE){
+        user_state = "WAITING";
+        reset_state(1000);
+      }
+    }
+    else if (user_state == "WAITING"){
+      stop();
+      reset_state(0);
+      if (t_tot >= 1.5){
         user_state = "TURN";
-        reset_state(1500);
+        t_tot = 0;
+      }
+      else{
+        t_tot += dt_s;
       }
     }
     else if (user_state == "TURN"){
       turn_left(count_left_RPS, count_right_RPS);
-      if (distance_LEFT >= turn_distance(90*LINE)){
+      if (distance >= turn_distance(180 + 90*LINE)){
         user_state = "FORWARD";
         reset_state(500);
       }
@@ -718,17 +765,17 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     theta = normalize_angle(theta);
 
     // Posicion actual
-    x0 += L_EJE*(theta - theta0)*cos(theta);
-    y0 += L_EJE*(theta - theta0)*sin(theta);
+    x_0 += L_EJE*(theta - theta0)*cos(theta);
+    y_0 += L_EJE*(theta - theta0)*sin(theta);
 
     // Calcula hacia donde esta el destino
-    double phi = atan2(y - y0, x - x0);
+    double phi = atan2(y - y_0, x - x_0);
     phi = normalize_angle(phi);
 
     Serial.print("Coordenadas (x, y) (m):  ");
-    Serial.print(x0);
+    Serial.print(x_0);
     Serial.print("\t");
-    Serial.print(y0);
+    Serial.print(y_0);
     Serial.print("\t");
     Serial.print("Angulo theta (rad):  ");
     Serial.print(theta);
@@ -741,7 +788,7 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     Serial.print("\t");
 
 
-    if ((fabs(x0 - x) > epsilon*0.4) || (fabs(y0 - y) > epsilon*0.4)){
+    if ((fabs(x_0 - x) > epsilon*0.4) || (fabs(y_0 - y) > epsilon*0.4)){
 
       // Alinea el robot hacia el punto correcto (REVISAR)
       if (fabs(phi - theta) > 2*epsilon){    
@@ -792,7 +839,37 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
       reset_state(3000);
     }
 
-    
+
+  
+  // #########################################################################
+  #elif defined(TEST_WIFI) // Test para realizarlo con Wifi, 
+
+    angle = data_received;
+
+    if (angle == 0){
+      stop();
+      reset_state(0);
+      pixels.fill(pixels.Color(0, 255, 0));
+      pixels.show();
+    }
+    else{
+      turn_left(count_left_RPS, count_right_RPS);
+      pixels.fill(pixels.Color(0, 0, 255));
+      pixels.show();
+      if (distance >= turn_distance(angle)){
+        Serial.print("Grados Girados: ");
+        Serial.print(angle);
+        angle = 0;
+        data_received = 0;
+        reset_state(1500);
+      }
+    }
+
+
+  // #########################################################################
+  #elif defined(LISSAJOUS)
+
+    turn_light_right(count_left_RPS, count_right_RPS); 
 
 
 

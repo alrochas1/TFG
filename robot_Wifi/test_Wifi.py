@@ -26,20 +26,20 @@ import socket
 def send_message():
 
     # Definir el número que quieres enviar
-    number = 240
+    number = 180
 
     # Estructura del mensaje https://docs.python.org/3/library/struct.html
     id = 1
     op = 1      # Código de operación para saludo
     len = 8    # Longitud de datos, un double
     header = struct.pack("HHH", id, op, len)
-    number_bytes = struct.pack('B', number)
+    number_bytes = struct.pack('d', number)
     # Crear el mensaje completo
     message = header + number_bytes
     print(message)
     
     # Dirección IP y puerto del Arduino
-    arduino_ip = '192.168.10.6'  # Cambiar a la dirección IP correcta
+    arduino_ip = '192.168.1.50'  # Cambiar a la dirección IP correcta
     arduino_port = 4244  # Puerto definido en el código del Arduino (destino)
     
     # Crear un socket UDP
