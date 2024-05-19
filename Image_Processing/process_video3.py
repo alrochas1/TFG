@@ -65,16 +65,16 @@ while True:
 
     # Aplica la máscara para obtener solo el primer plano
     frame_bs = cv.bitwise_and(frame, frame, mask=fgMask)
-    #frame_bs = cv.medianBlur(frame_bs, 11)
 
     #cv.imshow('Frame', frame)
     cv.imshow('Mascara', fgMask)
     cv.imshow('Fotograma con la mascara extraida', frame_bs)
 
     # Se queda con el valor maximo del frame (si es el primero, no hay maximo)
-    if N <= 1 :
-         final_image = frame_bs
-    else :
+    # Borra el primer fotograma, ya que a veces no se procesa bien
+    if N == 2 :
+        final_image = frame_bs
+    elif N>2:
         final_image = cv.max(final_image, frame_bs)
 
     print(f"{N/n_frames * 100:.2f} % ...")
@@ -88,7 +88,7 @@ while True:
 cap.release()
 cv.destroyAllWindows()
 
-final_image = cv.medianBlur(final_image, 7)
+final_image = cv.medianBlur(final_image, 5)
 
 cv.imshow('Imagen final', final_image)
 cv.imwrite(f"./Images/{ruta_archivo}.jpg", final_image)

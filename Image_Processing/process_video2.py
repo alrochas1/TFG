@@ -67,9 +67,10 @@ while True:
     cv.imshow('Fotograma con la mascara extraida', frame_bs)
 
     # Se queda con el valor maximo del frame (si es el primero, no hay maximo)
-    if N <= 1 :
-         final_image = frame_bs
-    else :
+    # Borra el primer fotograma, ya que a veces no se procesa bien
+    if N == 2 :
+        final_image = frame_bs
+    elif N>2:
         final_image = cv.max(final_image, frame_bs)
 
     print(f"{N/n_frames * 100:.2f} % ...")
