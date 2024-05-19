@@ -100,8 +100,8 @@ const int LED_RING = 3;  //  LED_RING
 
 #elif defined(WIFI_CASA)
   
-  char ssid[] = "your_home_wifi";       // your network SSID (name)
-  char pass[] = "your_password";        // your network password (use for WPA, or use as key for WEP)
+  char ssid[] = "WLAN_JLR";       // your network SSID (name)
+  char pass[] = "1234567890";     // your network password (use for WPA, or use as key for WEP)
 
   IPAddress ip_arduino1(192,168,1,50);
   IPAddress ip_server(192,168,1,100);
@@ -501,14 +501,19 @@ double x_0 = 0;
 double y_0 = 0;
 
 // Coordenadas a las que quiere ir
-double x = -0.5;
-double y = 0.0;
+double x = 0.5;
+double y = -0.0;
 
-double epsilon = 0.1;  // Para tener en cuenta el error
+double epsilon = 0.05;  // Para tener en cuenta el error
+const double alpha_t = PI/3;  // Tolerancia para el giro (60º)
 
 // -----------------------------------------------------
 
-int i = 1;
+double t = 0.0;
+
+// -----------------------------------------------------
+
+int i=1;
 double angle = 180.0;  //  Se usa para el test
 
 
@@ -538,9 +543,9 @@ void move_forward(double speed, double count_left_wheel, double count_right_whee
 
 
 // ------------------------------------------------------------------------------------
-// Esta es para girar sobre si mismo
+// Esta es para girar sobre si mismo (En la versión actual con una rueda)
 void turn_left(double count_left_wheel, double count_right_wheel){
-    //Serial.print("Girando izquierda ...");
+    Serial.print("Girando izquierda ...");
     turn(LEFT, count_left_wheel, count_right_wheel);
 }
 
@@ -585,7 +590,7 @@ void turn_radius(int TURN, double radius, double count_left_wheel, double count_
     turn(TURN, count_left_wheel, count_right_wheel);
   }
   else{
-    setpointW[TURN]  = 2.5;
+    setpointW[TURN]  = 2.7;
     setpointW[!TURN] = setpointW[TURN]*(2*radius + L_EJE)/(2*radius - L_EJE);      
 
     set_wheel_speed(LEFT_WHEEL,  FORWARD,  pid_left_motor(count_left_wheel));
@@ -607,10 +612,10 @@ void turn_light_right(double count_left_wheel, double count_right_wheel){
 
 void turn_light(int TURN, double count_left_wheel, double count_right_wheel){
 
-  double speed = 2.7;
+  double speed = 2.75;
 
-  setpointW[!TURN] = speed;
-  setpointW[TURN]  = speed*0.75;
+  setpointW[!TURN] = speed*1.1;
+  setpointW[TURN]  = speed;
   
 
   set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
@@ -699,11 +704,14 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // ELEGIR LO QUE SE QUIERE HACER #############################
 
   //#define CIRCLE        // Sirve para hacer circulos
-  #define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
+  //#define SQUARE        // Sirve para hacer cuadrados o para hacer una linea recta
   //#define POINT         // Sirve para hacer que se mueva a las coordenadas requeridas
   //#define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
   //#define TEST          // Para analizar el error en el giro
   //#define TEST_WIFI     // Para analizar el error en el giro usando Wifi (usar esta, es mucho más comoda)
+  #define LISSAJOUS_POINT // Pinta una figura de Lissajous usando el metodo de punto
+  //#define LISSAJOUS     // Pinta una figura de Lissajous matematicamente
+  //#define TEST_LIGHT      
   // Si no usas ninguno se queda parado
 
   // #########################################################################
@@ -716,8 +724,8 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(SQUARE) // Sirve para hacer cuadrados o para hacer una linea recta
 
-    double L_SQUARE =  1.0;     // Este es el lado del cuadrado(m)/longitud de la linea
-    int LINE = 0;               // 1 para cuadrados, 0 para rectas
+    double L_SQUARE =  0.4;     // Este es el lado del cuadrado(m)/longitud de la linea
+    int LINE = 1;               // 1 para cuadrados, 0 para rectas
     double speed = 2.8;
 
     if (user_state == "FORWARD"){
@@ -752,25 +760,80 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(POINT) // Sirve para hacer que se mueva a las coordenadas requeridas (pendiente de terminar)
 
-    // Coordenadas en metros
-    double speed = 2.75;
+    double speed = 2.7;
     
-    // Angulo actual
-    double theta0 = theta;
-    distance_LEFT  = (user_state == "TURN_LEFT")  ? -distance_LEFT :  distance_LEFT;
-    distance_RIGHT = (user_state == "TURN_RIGHT") ? -distance_RIGHT : distance_RIGHT;
-    distance = (distance_LEFT+distance_RIGHT)/2.0;  // De esta manera la distancia sera ~= 0 cuando gire
-
-    theta = (user_state == "TURN_LEFT") ? (theta - 2*(distance_LEFT)/L_EJE) : (theta + 2*(distance_RIGHT)/L_EJE);
-    theta = normalize_angle(theta);
-
-    // Posicion actual
-    x_0 += L_EJE*(theta - theta0)*cos(theta);
-    y_0 += L_EJE*(theta - theta0)*sin(theta);
+    // Angulo actual = theta
 
     // Calcula hacia donde esta el destino
     double phi = atan2(y - y_0, x - x_0);
     phi = normalize_angle(phi);
+
+    double alpha = (abs(theta - phi) <= PI) ? (theta-phi) : (theta-phi+2*PI);                // Distancia entre angulos
+
+    // Decide que hacer ------------------------------------------------------
+    if ((fabs(x_0 - x) < epsilon) && (fabs(y_0 - y) < epsilon)){    // Si ha llegado al punto
+      user_state="STOP";
+      pixels.fill(pixels.Color(0, 255, 0));
+      pixels.show();
+    }
+    if (user_state != "STOP"){
+      if ((user_state != "TURN_LEFT") && (user_state != "TURN_RIGHT")){
+        if (fabs(alpha) > alpha_t) {
+            user_state = "TURNING";
+        } else if (fabs(alpha) > alpha_t/4) {
+            user_state = "TURN_LIGHT";
+        } else {
+            user_state = "MOVE_FORWARD";
+        }
+      }
+      else{
+        user_state = (fabs(alpha) > alpha_t/3) ? user_state=user_state : user_state="STOP";
+        t_tot = (user_state != "STOP") ? 0 : t_tot+dt_s; // Realmente no va a llegar aqui nunca
+      }
+    }
+
+    // Hace lo que tenga que hacer ----------------------------------------------
+    if (user_state == "STOP"){
+      stop();
+      Serial.print("Parado...");
+      user_lw = 0; user_rw = 0;
+      distance = 0;
+      t_tot+=dt_s;
+      user_state = (t_tot > 2.0) ? "MOVE_FORWARD" : "STOP";
+    }
+    else if (user_state == "TURN_LIGHT"){
+      if (alpha>0){
+        turn_light_left(count_left_RPS, count_right_RPS);
+      }
+      else{
+        turn_light_left(count_left_RPS, count_right_RPS);
+      }
+      pixels.fill(pixels.Color(255, 150, 0));
+      pixels.show();
+      Serial.print("Correción...");
+    }
+    else if (user_state=="MOVE_FORWARD"){
+
+      move_forward(speed, count_left_RPS, count_right_RPS);
+      theta += (distance_LEFT-distance_RIGHT)/L_EJE;
+    }
+    else if (user_state=="TURNING"){  // Si no esta en el sector, gira y se coloca
+      user_state = (alpha > 0) ? "TURN_LEFT" : "TURN_RIGHT";
+    }
+    else if (user_state == "TURN_LEFT"){
+      turn_left(count_left_RPS, count_right_RPS);
+      theta += 1.4*(distance_RIGHT+distance_LEFT)/L_EJE;  // El 1.2 es para compensar los errores de medida (es a ojo)
+    }
+    else if (user_state == "TURN_RIGHT"){
+      turn_right(count_left_RPS, count_right_RPS);
+      theta -= 1.4*(distance_LEFT+distance_RIGHT)/L_EJE;  // El 1.2 es para compensar los errores de medida (es a ojo)
+    }
+    
+    // Calcula la nueva posición
+    theta = normalize_angle(theta);
+    x_0 += distance*cos(theta);
+    y_0 += distance*sin(theta);
+
 
     Serial.print("Coordenadas (x, y) (m):  ");
     Serial.print(x_0);
@@ -783,43 +846,9 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     Serial.print("Angulo phi (rad):  ");
     Serial.print(phi);
     Serial.print("\t");
-    Serial.print("Distancia de giro:  ");
-    Serial.print(2*(distance_RIGHT)/L_EJE);
+    Serial.print("Angulo alpha (rad):  ");
+    Serial.print(alpha);
     Serial.print("\t");
-
-
-    if ((fabs(x_0 - x) > epsilon*0.4) || (fabs(y_0 - y) > epsilon*0.4)){
-
-      // Alinea el robot hacia el punto correcto (REVISAR)
-      if (fabs(phi - theta) > 2*epsilon){    
-        if (normalize_angle(theta - phi) < PI){
-          turn_right(count_left_RPS, count_right_RPS);
-          user_state = "TURN_RIGHT";
-        }
-        else{
-          turn_left(count_left_RPS, count_right_RPS);
-          user_state = "TURN_LEFT";
-        }
-        pixels.fill(pixels.Color(0, 255, 0));
-      }
-
-      // Avanza hacia el punto
-      else{
-        user_state = "FORWARD";
-        move_forward(speed, count_left_RPS, count_right_RPS);
-        pixels.fill(pixels.Color(0, 0, 255));
-      }
-    }
-
-    else{
-      pixels.fill(pixels.Color(255, 0, 0));
-      pixels.show();
-      reset_state(5000);
-      x = -1.0;
-      y = 0.25;
-    }
-
-    pixels.show();
     user_lw = 0; user_rw = 0;
 
 
@@ -867,11 +896,115 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
 
 
   // #########################################################################
+  #elif defined(LISSAJOUS_POINT)
+
+    double speed = 2.7;
+
+    int m=1; int n=2;
+    double x = sin(m*(t*PI/180));
+    double y = sin(n*(t*PI/180));
+  
+    // Calcula hacia donde esta el destino
+    double phi = atan2(y - y_0, x - x_0);
+    phi = normalize_angle(phi);
+
+    double alpha = (abs(theta - phi) <= PI) ? (theta-phi) : (theta-phi+2*PI);                // Distancia entre angulos
+
+    // Decide que hacer ------------------------------------------------------
+    if ((fabs(x_0 - x) < epsilon) && (fabs(y_0 - y) < epsilon)){    // Si ha llegado al punto
+      t+=360/30.0;
+      pixels.fill(pixels.Color(0, 255, 0));
+      pixels.show();
+    }
+    if (user_state != "STOP"){
+      if ((user_state != "TURN_LEFT") && (user_state != "TURN_RIGHT")){
+        if (fabs(alpha) > alpha_t) {
+            user_state = "TURNING";
+        } else if (fabs(alpha) > alpha_t/4) {
+            user_state = "TURN_LIGHT";
+        } else {
+            user_state = "MOVE_FORWARD";
+        }
+      }
+      else{
+        user_state = (fabs(alpha) > alpha_t/3) ? user_state=user_state : user_state="STOP";
+        t_tot = (user_state != "STOP") ? 0 : t_tot+dt_s; // Realmente no va a llegar aqui nunca
+      }
+    }
+
+    // Hace lo que tenga que hacer ----------------------------------------------
+    if (user_state == "STOP"){
+      stop();
+      Serial.print("Parado...");
+      user_lw = 0; user_rw = 0;
+      distance = 0;
+      t_tot+=dt_s;
+      user_state = (t_tot > 0.5) ? "MOVE_FORWARD" : "STOP";
+    }
+    else if (user_state == "TURN_LIGHT"){
+      if (alpha>0){
+        turn_light_right(count_left_RPS, count_right_RPS);
+      }
+      else{
+        turn_light_left(count_left_RPS, count_right_RPS);
+      }
+      pixels.fill(pixels.Color(255, 130, 0));
+      pixels.show();
+      Serial.print("Correción...");
+    }
+    else if (user_state=="MOVE_FORWARD"){
+
+      move_forward(speed, count_left_RPS, count_right_RPS);
+      theta += (distance_LEFT-distance_RIGHT)/L_EJE;
+    }
+    else if (user_state=="TURNING"){  // Si no esta en el sector, gira y se coloca
+      user_state = (alpha > 0) ? "TURN_LEFT" : "TURN_RIGHT";
+      pixels.fill(pixels.Color(255, 0, 255));
+      pixels.show();
+    }
+    else if (user_state == "TURN_LEFT"){
+      turn_left(count_left_RPS, count_right_RPS);
+      theta += 1.4*(distance_RIGHT+distance_LEFT)/L_EJE;  // El 1.2 es para compensar los errores de medida (es a ojo)
+    }
+    else if (user_state == "TURN_RIGHT"){
+      turn_right(count_left_RPS, count_right_RPS);
+      theta -= 1.4*(distance_LEFT+distance_RIGHT)/L_EJE;  // El 1.2 es para compensar los errores de medida (es a ojo)
+    }
+    
+    // Calcula la nueva posición
+    theta = normalize_angle(theta);
+    x_0 += distance*cos(theta);
+    y_0 += distance*sin(theta);
+
+
+    Serial.print("Coordenadas (x, y) (m):  ");
+    Serial.print(x_0);
+    Serial.print("\t");
+    Serial.print(y_0);
+    Serial.print("\t");
+    Serial.print("Angulo theta (rad):  ");
+    Serial.print(theta);
+    Serial.print("\t");
+    Serial.print("Angulo phi (rad):  ");
+    Serial.print(phi);
+    Serial.print("\t");
+    Serial.print("Coordenadas destino:  ");
+    Serial.print(x);
+    Serial.print("\t");
+    Serial.print(y);
+    Serial.println("\t");
+    user_lw = 0; user_rw = 0; 
+
+
+
+  // #########################################################################
   #elif defined(LISSAJOUS)
 
-    turn_light_right(count_left_RPS, count_right_RPS); 
+    double speed = 2.7;
 
-
+    int m=1; int n=2;   // Parametros de las figuras
+    double x = sin(m*(t*PI/180));
+    double y = sin(n*(t*PI/180));
 
   // #########################################################################
   #elif defined(MOVE_NO_PID)
@@ -881,6 +1014,11 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     set_wheel_speed(LEFT_WHEEL,  FORWARD,  PWM);
     set_wheel_speed(RIGHT_WHEEL, FORWARD,  PWM);
 
+  // #########################################################################
+  #elif defined(TEST_LIGHT)
+
+    turn_light_left(count_left_RPS, count_right_RPS);
+  
   // #########################################################################
   #else
 
