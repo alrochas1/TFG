@@ -42,8 +42,8 @@ using namespace std;
 #define ALEJANDRO_MKR
 
 // Wifi - Uncomment only one option
-//#define ROBOTARIUM
-#define WIFI_CASA
+#define ROBOTARIUM
+//#define WIFI_CASA
 
 // ##########################################################
 // ###################### PIN LAYOUT ######################
@@ -81,7 +81,7 @@ const int LED_RING = 3;  //  LED_RING
   const int pin_left_motor_enable  = 6;
   const int pin_right_motor_dir_1  = 7;
   const int pin_right_motor_dir_2  = 8;
-  const int pin_right_motor_enable = 2;
+  const int pin_right_motor_enable = 10;
 #endif
 
 
@@ -223,6 +223,12 @@ void setup() {
   setup_encoders();
   setup_comms();
 
+  #ifdef LISSAJOUS
+
+    delay(500);
+
+  #endif
+
   //delay(500);
 }
 
@@ -308,6 +314,7 @@ void setup_encoders() {
 void setup_comms() {
   Serial.begin(115200);
 }
+
 
 // ##########################################################
 // ###################### CONTROL LOOP ###################### 
@@ -490,7 +497,7 @@ int feedforward(int motor) {
 double user_lw = 0;
 double user_rw = 0;
 
-double t_tot=0;
+double t_tot=330*PI/180;
 
 String user_state = "FORWARD";
 
@@ -501,7 +508,7 @@ double x_0 = 0;
 double y_0 = 0;
 
 // Coordenadas a las que quiere ir
-double x = 0.5;
+double x = -0.5;
 double y = -0.0;
 
 double epsilon = 0.05;  // Para tener en cuenta el error
@@ -590,7 +597,7 @@ void turn_radius(int TURN, double radius, double count_left_wheel, double count_
     turn(TURN, count_left_wheel, count_right_wheel);
   }
   else{
-    setpointW[TURN]  = 2.7;
+    setpointW[TURN]  = 2.75;
     setpointW[!TURN] = setpointW[TURN]*(2*radius + L_EJE)/(2*radius - L_EJE);      
 
     set_wheel_speed(LEFT_WHEEL,  FORWARD,  pid_left_motor(count_left_wheel));
@@ -617,6 +624,23 @@ void turn_light(int TURN, double count_left_wheel, double count_right_wheel){
   setpointW[!TURN] = speed*1.1;
   setpointW[TURN]  = speed;
   
+
+  set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
+  set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
+
+}
+
+
+// ------------------------------------------------------------------------------------
+// Traza un arco. Pasarle la relacion entre V_LEFT/V_RIGHT
+void turn_ark(double relation, double count_left_wheel, double count_right_wheel){
+
+  double speed = 2.8;
+  int direction = (relation >= 1) ? LEFT_WHEEL : RIGHT_WHEEL;
+  relation = (relation >= 1) ? relation : 1/relation;
+
+  setpointW[direction]  = relation*speed;
+  setpointW[!direction] = speed;
 
   set_wheel_speed(LEFT_WHEEL,  FORWARD, pid_left_motor(count_left_wheel));
   set_wheel_speed(RIGHT_WHEEL, FORWARD, pid_right_motor(count_right_wheel));
@@ -661,6 +685,39 @@ double normalize_angle(double angle){
 double turn_distance(double angle){
 
   return PI*L_EJE*((angle-100)/360.0);
+
+}
+
+// ------------------------------------------------------------------------------------
+
+double lissajous_W(double A, double B, double m, double n, double t, double phi){
+
+  double f = 1/30.0;
+
+  double num = n*m*A*B*(m * sin(m*t) * cos(n*t + phi) - n * cos(m*t) * sin(n*t + phi));
+  double denom = pow(n, 2) * pow(A, 2) * pow(cos(n*t + phi), 2) + pow(m, 2) * pow(B, 2) * pow(cos(m*t), 2);
+  return num / denom;
+
+}
+
+double lissajous_V(double A, double B, double m, double n, double t, double phi){
+
+  double f = 1/30.0;
+  double Vx = A*m*cos(m*t);
+  double Vy = A*n*cos(n*t + phi);
+
+  double V = sqrt(Vx*Vx + Vy*Vy);
+
+  return V;
+
+}
+
+// ------------------------------------------------------------------------------------
+
+void change_lights(double R, double G, double B){
+
+  pixels.fill(pixels.Color(R, G, B));
+  pixels.show();
 
 }
 
@@ -709,24 +766,30 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   //#define MOVE_NO_PID   // Para hacer las pruebas sin que moleste el PID
   //#define TEST          // Para analizar el error en el giro
   //#define TEST_WIFI     // Para analizar el error en el giro usando Wifi (usar esta, es mucho más comoda)
-  #define LISSAJOUS_POINT // Pinta una figura de Lissajous usando el metodo de punto
-  //#define LISSAJOUS     // Pinta una figura de Lissajous matematicamente
+  //#define LISSAJOUS_POINT // Pinta una figura de Lissajous usando el metodo de punto
+  #define LISSAJOUS     // Pinta una figura de Lissajous matematicamente
   //#define TEST_LIGHT      
   // Si no usas ninguno se queda parado
 
   // #########################################################################
   #ifdef CIRCLE // Sirve para hacer circulos
 
-    double radius = 0.3085;
+    double radius = 0.40;
     turn_radius_left(radius, count_left_RPS, count_right_RPS);
+
+    pixels.fill(pixels.Color(0, 0, 255));
+    pixels.show();
 
 
   // #########################################################################
   #elif defined(SQUARE) // Sirve para hacer cuadrados o para hacer una linea recta
 
-    double L_SQUARE =  0.4;     // Este es el lado del cuadrado(m)/longitud de la linea
+    double L_SQUARE =  0.75;     // Este es el lado del cuadrado(m)/longitud de la linea
     int LINE = 1;               // 1 para cuadrados, 0 para rectas
-    double speed = 2.8;
+    double speed = 3.8;
+
+    pixels.fill(pixels.Color(0, 255, 0));
+    pixels.show();
 
     if (user_state == "FORWARD"){
       move_forward(speed, count_left_RPS, count_right_RPS);
@@ -775,13 +838,14 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
       user_state="STOP";
       pixels.fill(pixels.Color(0, 255, 0));
       pixels.show();
+      x = -0.2; y=-0.5;
     }
     if (user_state != "STOP"){
       if ((user_state != "TURN_LEFT") && (user_state != "TURN_RIGHT")){
         if (fabs(alpha) > alpha_t) {
             user_state = "TURNING";
-        } else if (fabs(alpha) > alpha_t/4) {
-            user_state = "TURN_LIGHT";
+        } else if (fabs(alpha) > alpha_t*2) {   // Esta desactivado
+             user_state = "TURN_LIGHT";
         } else {
             user_state = "MOVE_FORWARD";
         }
@@ -804,9 +868,11 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     else if (user_state == "TURN_LIGHT"){
       if (alpha>0){
         turn_light_left(count_left_RPS, count_right_RPS);
+        theta += (distance_RIGHT+distance_LEFT)/(L_EJE);
       }
       else{
         turn_light_left(count_left_RPS, count_right_RPS);
+        theta += (distance_LEFT+distance_RIGHT)/(L_EJE);
       }
       pixels.fill(pixels.Color(255, 150, 0));
       pixels.show();
@@ -815,18 +881,20 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
     else if (user_state=="MOVE_FORWARD"){
 
       move_forward(speed, count_left_RPS, count_right_RPS);
-      theta += (distance_LEFT-distance_RIGHT)/L_EJE;
+      theta += (distance_LEFT-distance_RIGHT)/(L_EJE);
+      pixels.fill(pixels.Color(255, 150, 0));
+      pixels.show();
     }
     else if (user_state=="TURNING"){  // Si no esta en el sector, gira y se coloca
       user_state = (alpha > 0) ? "TURN_LEFT" : "TURN_RIGHT";
     }
     else if (user_state == "TURN_LEFT"){
       turn_left(count_left_RPS, count_right_RPS);
-      theta += 1.4*(distance_RIGHT+distance_LEFT)/L_EJE;  // El 1.2 es para compensar los errores de medida (es a ojo)
+      theta += 1.4*(distance_RIGHT+distance_LEFT)/L_EJE;  // El 1.4 es para compensar los errores de medida (es a ojo)
     }
     else if (user_state == "TURN_RIGHT"){
       turn_right(count_left_RPS, count_right_RPS);
-      theta -= 1.4*(distance_LEFT+distance_RIGHT)/L_EJE;  // El 1.2 es para compensar los errores de medida (es a ojo)
+      theta -= 1.4*(distance_LEFT+distance_RIGHT)/L_EJE;  // El 1.4ls es para compensar los errores de medida (es a ojo)
     }
     
     // Calcula la nueva posición
@@ -1000,11 +1068,52 @@ void update_control(double count_left_wheel, double count_right_wheel, double dt
   // #########################################################################
   #elif defined(LISSAJOUS)
 
-    double speed = 2.7;
+    //double speed = 2.75;
 
     int m=1; int n=2;   // Parametros de las figuras
-    double x = sin(m*(t*PI/180));
-    double y = sin(n*(t*PI/180));
+    double A = 1.25; double B = 0.3; double delta = 0*PI/2;
+
+    if (distance <= 0){   // Para asegurarme de que empieza en 0
+      
+      t_tot = 330*PI/180;
+
+    }
+
+    //double V_LEFT  = lissajous((0.25+L_EJE/2), m, n, t_tot, 0);
+    //double V_RIGHT = lissajous((0.25-L_EJE/2), m, n, t_tot, 0);
+    //double V_LEFT  = lissajous(A, B, m, n, t_tot, 0);
+    double V = lissajous_V(A, B, m, n, t_tot, delta);
+    double W = lissajous_W(A, B, m, n, t_tot, delta);
+
+    double V_LEFT = V - L_EJE*W/2;
+    double V_RIGHT = V + L_EJE*W/2;
+
+
+    //int direction = (V_LEFT >= V_RIGHT) ? RIGHT : LEFT;
+    turn_ark(V_LEFT/V_RIGHT, count_left_RPS, count_right_RPS);
+    if ((V_LEFT/V_RIGHT) > 1.2 || (V_LEFT/V_RIGHT) < 0.833){
+      t_tot += 0.26*dt_s;
+    }
+    else{
+      t_tot += dt_s;
+    }
+    t_tot = normalize_angle(t_tot);
+
+    Serial.print("Velocidades Calculadas (RPS): ");
+    Serial.print(V_LEFT);
+    Serial.print("\t");
+    Serial.print(V_RIGHT);
+    Serial.print("\t");
+    Serial.print("Posicion en la figura (º): ");
+    Serial.print(normalize_angle(t_tot)*180/PI);
+
+    if(t_tot<=3.14){
+      change_lights(0+t_tot*255/3.14, 0, 255-t_tot*255/3.14);
+    }
+    else{
+      change_lights(255-(t_tot-3.14)*255/3.14, 0, 0+(t_tot-3.14)*255/3.14);
+    }
+
 
   // #########################################################################
   #elif defined(MOVE_NO_PID)

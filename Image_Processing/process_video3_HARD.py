@@ -4,7 +4,7 @@
 # Esta versión elimina el fondo de la imagen, usando BackgroundSubtractorMOG2 (ver enlace).
 # Con esto crea una mascara que elimina el fondo de cada imagen y con el resultado realiza
 # el mismo proceso que process_video.py (se queda con el maximo).
-# Ademas, esta version aplica un filtro de la mediana para eliminar un poco ruido
+# Ademas, esta version aplica un filtro de la mediana para eliminar un poco de ruido
 # (esta version aplica el filtro a cada fotograma --> MUY LENTO)
 
 # https://github.com/PacktPublishing/Python-Image-Processing-Cookbook/blob/master/Chapter%2001/Chapter01.ipynb
@@ -42,7 +42,7 @@ if background is None:
 
 # Aqui calcula el fondo
 N = 1
-backSub = cv.createBackgroundSubtractorMOG2(history=10, varThreshold=1024)   #history=10, varThreshold=1024, detectShadows=True
+backSub = cv.createBackgroundSubtractorMOG2(history=10, varThreshold=100)   #history=10, varThreshold=1024, detectShadows=True
 backSub.apply(background, learningRate=1)   # Usa el fondo basico que ya tenemos
 
 # COMIENZA EL PROCESADO

@@ -43,7 +43,7 @@ if background is None:
 
 # Aqui calcula el fondo
 N = 1
-backSub = cv.createBackgroundSubtractorMOG2(history=10, varThreshold=1024)   #history=10, varThreshold=1024, detectShadows=True
+backSub = cv.createBackgroundSubtractorMOG2(history=10, varThreshold=200)   #history=10, varThreshold=1024, detectShadows=True
 backSub.apply(background, learningRate=1)   # Usa el fondo basico que ya tenemos
 
 # COMIENZA EL PROCESADO
